@@ -167,9 +167,9 @@
 <body>
     <div class="container">
         <div class="logo">
-        <img src="JM-logo.png" alt="JooyMedia Logo" style="max-width:150px; height:auto;">
-    </div>
-<h1>JooyMedia QR Scanner</h1>
+            <img src="JM-logo.png" alt="JooyMedia Logo" style="max-width:150px; height:auto;">
+        </div>
+        <h1>JooyMedia QR Scanner</h1>
         
         <!-- Step 1: Passcode -->
         <div class="step active" id="step1">
@@ -185,7 +185,7 @@
             <div class="file-input" onclick="document.getElementById('qrFile').click()">
                 <input type="file" id="qrFile" accept="image/*" onchange="handleFileSelect(event)">
                 <p>📷 Click to upload QR code image</p>
-                <small>Supports JPG, PNG, GIF</small>
+                <small>Supports JPG, PNG, HEIC (iPhone), GIF</small>
             </div>
             <button onclick="processQR()" id="processBtn" disabled>Process QR Code</button>
             <div id="qr-result"></div>
@@ -202,10 +202,9 @@
     <script>
         let selectedFile = null;
         
-        // Configuration - UPDATE THESE VALUES
         const CONFIG = {
-            PASSCODE: 'JM8888',  // Change this to your desired passcode
-            WEBHOOK_URL: 'https://ys286.zeabur.app/webhook/f82a4472-9385-4e0b-b40b-78b15a9fdac4'  // Your actual webhook URL
+            PASSCODE: 'JM8888',
+            WEBHOOK_URL: 'https://ys286.zeabur.app/webhook/f82a4472-9385-4e0b-b40b-78b15a9fdac4'
         };
         
         function verifyPasscode() {
@@ -236,24 +235,21 @@
             }
             
             const processBtn = document.getElementById('processBtn');
-            const resultDiv = document.getElementById('qr-result');
-            
             processBtn.disabled = true;
             processBtn.innerHTML = '<span class="loading"></span>Processing...';
             
             try {
-                // Convert image to base64
-                const base64 = await fileToBase64(selectedFile);
+                // ✅ Convert all images (including HEIC/HEIF) to PNG
+                const pngBlob = await convertToPNG(selectedFile);
                 
-                // Try to read QR code using multiple methods
-                const qrData = await readQRCode(base64);
+                // Send to QR decoder
+                const qrData = await readQRCode(pngBlob);
                 
                 if (qrData) {
-                    // Send to webhook
                     await sendToWebhook(qrData);
                     showSuccess(qrData);
                 } else {
-                    showError('Could not read QR code from image. Please ensure the image is clear and contains a valid QR code.');
+                    showError('Could not read QR code from image. Please ensure the image is clear.');
                 }
             } catch (error) {
                 showError('Error processing QR code: ' + error.message);
@@ -262,21 +258,37 @@
                 processBtn.innerHTML = 'Process QR Code';
             }
         }
-        
-        function fileToBase64(file) {
+
+        // 🔥 Convert any uploaded file to PNG
+        function convertToPNG(file) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement("canvas");
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext("2d");
+                        ctx.drawImage(img, 0, 0);
+                        canvas.toBlob(
+                            (blob) => resolve(blob),
+                            "image/png",
+                            1.0
+                        );
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
                 reader.readAsDataURL(file);
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = error => reject(error);
             });
         }
-        
-        async function readQRCode(base64Image) {
-            // Try method 1: QR Server API with base64
+
+        async function readQRCode(pngBlob) {
             try {
                 const formData = new FormData();
-                formData.append('file', selectedFile);
+                formData.append('file', pngBlob, 'upload.png'); // force PNG
                 
                 const response = await fetch('https://api.qrserver.com/v1/read-qr-code/', {
                     method: 'POST',
@@ -284,14 +296,12 @@
                 });
                 
                 const result = await response.json();
-                if (result && result[0] && result[0].symbol && result[0].symbol[0] && result[0].symbol[0].data) {
+                if (result && result[0] && result[0].symbol[0].data) {
                     return result[0].symbol[0].data;
                 }
             } catch (e) {
-                console.log('Method 1 failed:', e);
+                console.log('QR decode failed:', e);
             }
-            
-            // If API fails, show manual input option
             return await promptManualEntry();
         }
         
@@ -303,11 +313,9 @@
                         <p>⚠️ Automatic QR reading failed.</p>
                         <p>Please manually type the QR code content:</p>
                         <input type="text" id="manualQR" placeholder="Enter QR code content" style="margin: 10px 0;" />
-                        <button onclick="submitManualQR('${resolve}')">Submit</button>
+                        <button onclick="submitManualQR()">Submit</button>
                     </div>
                 `;
-                
-                // Store resolve function globally for button click
                 window.resolveManualQR = resolve;
             });
         }
@@ -322,10 +330,6 @@
         }
         
         async function sendToWebhook(qrData) {
-            if (!CONFIG.WEBHOOK_URL || CONFIG.WEBHOOK_URL === 'YOUR_N8N_WEBHOOK_URL_HERE') {
-                throw new Error('Webhook URL not configured. Please update the CONFIG section.');
-            }
-            
             const payload = {
                 qr_data: qrData,
                 timestamp: new Date().toISOString(),
@@ -334,9 +338,7 @@
             
             const response = await fetch(CONFIG.WEBHOOK_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             
