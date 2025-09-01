@@ -275,7 +275,7 @@ function showAlreadyCheckedIn(webhookResponse) {
     `<div class="already-checked-in">
        <h3>This ticket has already been used</h3>
        <p><strong>Ticket:</strong> ${webhookResponse.ticket_number}</p>
-       <p><strong>Message:</strong> ${webhookResponse.message}</p>
+       <p><strong>Status:</strong> Already checked in</p>
        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
        <p><em>Please contact event staff if this is an error.</em></p>
      </div>`;
