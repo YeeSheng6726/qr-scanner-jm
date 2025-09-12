@@ -143,7 +143,7 @@
 let selectedFile = null;
 const CONFIG = {
   PASSCODE: 'JM8888',
-  WEBHOOK_URL: 'https://jooymedia.zeabur.app/webhook/b744552e-0801-408d-a84e-267196b27730'
+  WEBHOOK_URL: 'https://jooymedia.zeabur.app/webhook-test/b744552e-0801-408d-a84e-267196b27730'
 };
 
 function verifyPasscode() {
@@ -421,6 +421,24 @@ function showError(msg) {
 function showStep(n) {
   document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
   document.getElementById(`step${n}`).classList.add('active');
+}
+
+function toggleMode() {
+  CONFIG.USE_PRODUCTION = !CONFIG.USE_PRODUCTION;
+  const btn = document.getElementById('modeBtn');
+  const mode = CONFIG.USE_PRODUCTION ? 'PRODUCTION' : 'TEST';
+  const switchTo = CONFIG.USE_PRODUCTION ? 'TEST' : 'PRODUCTION';
+  
+  btn.textContent = `Switch to ${switchTo} Mode`;
+  btn.style.background = CONFIG.USE_PRODUCTION ? '#F44336' : '#4CAF50';
+  
+  document.getElementById('qr-result').innerHTML = `
+    <div style="color: ${CONFIG.USE_PRODUCTION ? '#F44336' : '#4CAF50'}; font-weight: bold;">
+      📡 Now using ${mode} webhook
+    </div>
+  `;
+  
+  console.log(`Switched to ${mode} mode`);
 }
 
 function resetScanner() {
