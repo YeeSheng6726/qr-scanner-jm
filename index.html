@@ -79,7 +79,7 @@
     }
     .file-input:hover { background-color: #fff5f2; }
     .file-input input { display: none; }
-    .result, .error, .success, .already-checked-in {
+    .result, .error, .success, .already-checked-in, .debug {
       padding: 15px;
       border-radius: 10px;
       margin: 20px 0;
@@ -88,6 +88,7 @@
     .error { background: #fff0f0; border: 2px solid #f44336; color: #f44336; }
     .success { background: #f0f8f0; border: 2px solid #4CAF50; color: #4CAF50; }
     .already-checked-in { background: #fff8e1; border: 2px solid #ff9800; color: #e65100; }
+    .debug { background: #f5f5f5; border: 2px solid #666; color: #333; text-align: left; font-family: monospace; font-size: 12px; }
     .loading {
       display: inline-block;
       width: 20px; height: 20px;
@@ -128,6 +129,7 @@
         <small>Supports JPG, PNG, HEIC (iPhone), GIF</small>
       </div>
       <button onclick="processQR()" id="processBtn" disabled>Process QR Code</button>
+      <button onclick="testWebhook()" style="background: #666; margin-top: 10px;">🔧 Test Webhook Connection</button>
       <div id="qr-result"></div>
     </div>
     <!-- Step 3: Success -->
@@ -164,6 +166,72 @@ function handleFileSelect(event) {
   }
 }
 
+// Test webhook connectivity
+async function testWebhook() {
+  const resultDiv = document.getElementById('qr-result');
+  resultDiv.innerHTML = '<div class="loading"></div>Testing webhook connection...';
+  
+  try {
+    console.log('Testing webhook URL:', CONFIG.WEBHOOK_URL);
+    
+    const testPayload = { 
+      test: true,
+      qr_data: "TEST_TICKET_123", 
+      timestamp: new Date().toISOString(), 
+      source: 'connection_test' 
+    };
+    
+    const response = await fetch(CONFIG.WEBHOOK_URL, {
+      method: 'POST', 
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }, 
+      body: JSON.stringify(testPayload)
+    });
+    
+    console.log('Response status:', response.status);
+    console.log('Response headers:', response.headers);
+    
+    const responseText = await response.text();
+    console.log('Response body:', responseText);
+    
+    if (response.ok) {
+      resultDiv.innerHTML = `
+        <div class="success">✅ Webhook connection successful!</div>
+        <div class="debug">
+          <strong>Response Status:</strong> ${response.status}<br>
+          <strong>Response Body:</strong><br>${responseText}
+        </div>
+      `;
+    } else {
+      resultDiv.innerHTML = `
+        <div class="error">❌ Webhook returned error status: ${response.status}</div>
+        <div class="debug">
+          <strong>Response Body:</strong><br>${responseText}
+        </div>
+      `;
+    }
+    
+  } catch (error) {
+    console.error('Webhook test error:', error);
+    resultDiv.innerHTML = `
+      <div class="error">❌ Webhook connection failed: ${error.message}</div>
+      <div class="debug">
+        <strong>Error Details:</strong><br>
+        Type: ${error.name}<br>
+        Message: ${error.message}<br>
+        <br>
+        <strong>Possible causes:</strong><br>
+        - Webhook URL is incorrect<br>
+        - Server is down<br>
+        - CORS policy blocking request<br>
+        - Network connectivity issues
+      </div>
+    `;
+  }
+}
+
 // Convert any image (HEIC, PNG, JPG) → resized JPEG (max 1000px)
 function shrinkImage(file) {
   return new Promise((resolve, reject) => {
@@ -193,28 +261,59 @@ function shrinkImage(file) {
 }
 
 async function processQR() {
-  if (!selectedFile) { showError('Please select an image file first.'); return; }
+  if (!selectedFile) { 
+    showError('Please select an image file first.'); 
+    return; 
+  }
+  
   const btn = document.getElementById('processBtn');
-  btn.disabled = true; btn.innerHTML = '<span class="loading"></span>Processing...';
+  btn.disabled = true; 
+  btn.innerHTML = '<span class="loading"></span>Processing...';
   
   try {
+    console.log('Starting QR processing...');
+    
     const smallFile = await shrinkImage(selectedFile);
+    console.log('Image resized successfully');
+    
     const formData = new FormData();
     formData.append('file', smallFile);
-    const response = await fetch('https://api.qrserver.com/v1/read-qr-code/', { method: 'POST', body: formData });
+    
+    console.log('Sending to QR API...');
+    const response = await fetch('https://api.qrserver.com/v1/read-qr-code/', { 
+      method: 'POST', 
+      body: formData 
+    });
+    
     const result = await response.json();
+    console.log('QR API result:', result);
+    
     const qrData = result[0]?.symbol[0]?.data;
     
     if (qrData) {
+      console.log('QR data extracted:', qrData);
+      showQRResult(qrData);
       await sendToWebhook(qrData);
     } else {
       showError('⚠️ Could not read QR code. Please try again or enter manually.');
+      console.log('Failed to extract QR data from result:', result);
     }
   } catch (err) {
-    showError('Error: ' + err.message);
+    console.error('QR processing error:', err);
+    showError('Error processing QR: ' + err.message);
   } finally {
-    btn.disabled = false; btn.innerHTML = 'Process QR Code';
+    btn.disabled = false; 
+    btn.innerHTML = 'Process QR Code';
   }
+}
+
+function showQRResult(qrData) {
+  document.getElementById('qr-result').innerHTML = `
+    <div class="result">
+      📱 QR Code Decoded: <strong>${qrData}</strong><br>
+      Now sending to webhook...
+    </div>
+  `;
 }
 
 async function sendToWebhook(qrData) {
@@ -224,19 +323,30 @@ async function sendToWebhook(qrData) {
     source: 'custom_scanner' 
   };
   
+  console.log('Sending payload to webhook:', payload);
+  
   try {
     const response = await fetch(CONFIG.WEBHOOK_URL, {
       method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }, 
       body: JSON.stringify(payload)
     });
     
+    console.log('Webhook response status:', response.status);
+    console.log('Webhook response headers:', response.headers);
+    
     if (!response.ok) {
-      throw new Error('Failed to send to webhook');
+      const errorText = await response.text();
+      console.error('Webhook error response:', errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
     
     // Parse the response from your n8n workflow
     const webhookResponse = await response.json();
+    console.log('Webhook response data:', webhookResponse);
     
     // Handle different response types
     if (webhookResponse.success === true && webhookResponse.status === 'checked_in') {
@@ -247,12 +357,22 @@ async function sendToWebhook(qrData) {
       showAlreadyCheckedIn(webhookResponse);
     } else {
       // Fallback for unexpected responses
-      showGenericSuccess(qrData);
+      showGenericSuccess(qrData, webhookResponse);
     }
     
   } catch (error) {
     console.error('Webhook error:', error);
     showError('Failed to process check-in: ' + error.message);
+    
+    // Show debug info
+    document.getElementById('qr-result').innerHTML += `
+      <div class="debug">
+        <strong>Debug Info:</strong><br>
+        QR Data: ${qrData}<br>
+        Webhook URL: ${CONFIG.WEBHOOK_URL}<br>
+        Error: ${error.message}
+      </div>
+    `;
   }
 }
 
@@ -282,13 +402,14 @@ function showAlreadyCheckedIn(webhookResponse) {
   showStep(3);
 }
 
-function showGenericSuccess(qrData) {
+function showGenericSuccess(qrData, webhookResponse) {
   document.getElementById('result-title').innerHTML = '✅ QR Code Processed';
   document.getElementById('final-result').innerHTML =
     `<div class="success">
        <h3>QR Code Processed Successfully!</h3>
        <p><strong>Ticket:</strong> ${qrData}</p>
        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+       ${webhookResponse ? `<div class="debug">Response: ${JSON.stringify(webhookResponse)}</div>` : ''}
      </div>`;
   showStep(3);
 }
