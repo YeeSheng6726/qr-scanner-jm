@@ -42,6 +42,18 @@
       margin-bottom: 30px;
       font-size: 1.8em;
     }
+    .mode-indicator {
+      background: #4CAF50;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      margin-bottom: 20px;
+      display: inline-block;
+    }
+    .mode-indicator.production {
+      background: #F44336;
+    }
     .step { display: none; animation: fadeIn 0.5s ease-in; }
     .step.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -99,6 +111,15 @@
       margin-right: 10px;
     }
     @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
+    .toggle-btn {
+      background: #4CAF50 !important;
+      font-size: 14px !important;
+      padding: 10px 20px !important;
+      margin-bottom: 10px;
+    }
+    .toggle-btn.production {
+      background: #F44336 !important;
+    }
     /* Mobile fixes */
     @media (max-width: 600px) {
       h1 { font-size: 1.4em; }
@@ -113,6 +134,8 @@
       <img src="JM-logo.png" alt="JooyMedia Logo" style="max-width:150px; height:auto;">
     </div>
     <h1>JooyMedia QR Scanner</h1>
+    <div id="mode-indicator" class="mode-indicator">🧪 TEST MODE</div>
+    
     <!-- Step 1: Passcode -->
     <div class="step active" id="step1">
       <h2>Enter Passcode</h2>
@@ -120,8 +143,11 @@
       <button onclick="verifyPasscode()">Verify Passcode</button>
       <div id="passcode-error"></div>
     </div>
+    
     <!-- Step 2: QR Scanner -->
     <div class="step" id="step2">
+      <button onclick="toggleMode()" id="modeBtn" class="toggle-btn">🚀 Switch to PRODUCTION Mode</button>
+      
       <h2>Scan QR Code</h2>
       <div class="file-input" onclick="document.getElementById('qrFile').click()">
         <input type="file" id="qrFile" accept="image/*" onchange="handleFileSelect(event)">
@@ -129,9 +155,10 @@
         <small>Supports JPG, PNG, HEIC (iPhone), GIF</small>
       </div>
       <button onclick="processQR()" id="processBtn" disabled>Process QR Code</button>
-      <button onclick="testWebhook()" style="background: #666; margin-top: 10px;">🔧 Test Webhook Connection</button>
+      <button onclick="testWebhook()" style="background: #666; margin-top: 10px;">🔧 Test Current Webhook</button>
       <div id="qr-result"></div>
     </div>
+    
     <!-- Step 3: Success -->
     <div class="step" id="step3">
       <h2 id="result-title">✅ Success!</h2>
@@ -141,10 +168,21 @@
   </div>
 <script>
 let selectedFile = null;
+
+// 🔥 FIXED CONFIG - Now supports both test and production URLs
 const CONFIG = {
   PASSCODE: 'JM8888',
-  WEBHOOK_URL: 'https://jooymedia.zeabur.app/webhook/b744552e-0801-408d-a84e-267196b27730'
+  USE_PRODUCTION: false, // Start in test mode by default
+  URLS: {
+    TEST: 'https://jooymedia.zeabur.app/webhook-test/b744552e-0801-408d-a84e-267196b27730',
+    PRODUCTION: 'https://jooymedia.zeabur.app/webhook/b744552e-0801-408d-a84e-267196b27730'
+  }
 };
+
+// Get current webhook URL based on mode
+function getCurrentWebhookUrl() {
+  return CONFIG.USE_PRODUCTION ? CONFIG.URLS.PRODUCTION : CONFIG.URLS.TEST;
+}
 
 function verifyPasscode() {
   const passcode = document.getElementById('passcode').value;
@@ -166,22 +204,64 @@ function handleFileSelect(event) {
   }
 }
 
-// Test webhook connectivity
+// 🔥 FIXED: Toggle between test and production modes
+function toggleMode() {
+  CONFIG.USE_PRODUCTION = !CONFIG.USE_PRODUCTION;
+  updateModeDisplay();
+  
+  const resultDiv = document.getElementById('qr-result');
+  const mode = CONFIG.USE_PRODUCTION ? 'PRODUCTION' : 'TEST';
+  const url = getCurrentWebhookUrl();
+  
+  resultDiv.innerHTML = `
+    <div style="color: ${CONFIG.USE_PRODUCTION ? '#F44336' : '#4CAF50'}; font-weight: bold; padding: 10px; background: #f9f9f9; border-radius: 8px;">
+      📡 Switched to <strong>${mode} MODE</strong><br>
+      <small style="font-family: monospace;">${url}</small>
+    </div>
+  `;
+  
+  console.log(`Switched to ${mode} mode:`, url);
+}
+
+function updateModeDisplay() {
+  const indicator = document.getElementById('mode-indicator');
+  const toggleBtn = document.getElementById('modeBtn');
+  
+  if (CONFIG.USE_PRODUCTION) {
+    // Production mode
+    indicator.textContent = '🚀 PRODUCTION MODE';
+    indicator.className = 'mode-indicator production';
+    toggleBtn.textContent = '🧪 Switch to TEST Mode';
+    toggleBtn.className = 'toggle-btn production';
+  } else {
+    // Test mode
+    indicator.textContent = '🧪 TEST MODE';
+    indicator.className = 'mode-indicator';
+    toggleBtn.textContent = '🚀 Switch to PRODUCTION Mode';
+    toggleBtn.className = 'toggle-btn';
+  }
+}
+
+// Test current webhook connectivity
 async function testWebhook() {
   const resultDiv = document.getElementById('qr-result');
-  resultDiv.innerHTML = '<div class="loading"></div>Testing webhook connection...';
+  const webhookUrl = getCurrentWebhookUrl();
+  const mode = CONFIG.USE_PRODUCTION ? 'PRODUCTION' : 'TEST';
+  
+  resultDiv.innerHTML = `<div class="loading"></div>Testing ${mode} webhook connection...`;
   
   try {
-    console.log('Testing webhook URL:', CONFIG.WEBHOOK_URL);
+    console.log(`Testing ${mode} webhook URL:`, webhookUrl);
     
     const testPayload = { 
       test: true,
       qr_data: "TEST_TICKET_123", 
       timestamp: new Date().toISOString(), 
-      source: 'connection_test' 
+      source: 'connection_test',
+      mode: mode.toLowerCase()
     };
     
-    const response = await fetch(CONFIG.WEBHOOK_URL, {
+    const response = await fetch(webhookUrl, {
       method: 'POST', 
       headers: { 
         'Content-Type': 'application/json',
@@ -191,24 +271,25 @@ async function testWebhook() {
     });
     
     console.log('Response status:', response.status);
-    console.log('Response headers:', response.headers);
-    
     const responseText = await response.text();
     console.log('Response body:', responseText);
     
     if (response.ok) {
       resultDiv.innerHTML = `
-        <div class="success">✅ Webhook connection successful!</div>
+        <div class="success">✅ ${mode} webhook connection successful!</div>
         <div class="debug">
-          <strong>Response Status:</strong> ${response.status}<br>
-          <strong>Response Body:</strong><br>${responseText}
+          <strong>Mode:</strong> ${mode}<br>
+          <strong>URL:</strong> ${webhookUrl}<br>
+          <strong>Status:</strong> ${response.status}<br>
+          <strong>Response:</strong><br>${responseText}
         </div>
       `;
     } else {
       resultDiv.innerHTML = `
-        <div class="error">❌ Webhook returned error status: ${response.status}</div>
+        <div class="error">❌ ${mode} webhook returned error status: ${response.status}</div>
         <div class="debug">
-          <strong>Response Body:</strong><br>${responseText}
+          <strong>URL:</strong> ${webhookUrl}<br>
+          <strong>Response:</strong><br>${responseText}
         </div>
       `;
     }
@@ -216,17 +297,19 @@ async function testWebhook() {
   } catch (error) {
     console.error('Webhook test error:', error);
     resultDiv.innerHTML = `
-      <div class="error">❌ Webhook connection failed: ${error.message}</div>
+      <div class="error">❌ ${mode} webhook connection failed: ${error.message}</div>
       <div class="debug">
-        <strong>Error Details:</strong><br>
-        Type: ${error.name}<br>
-        Message: ${error.message}<br>
+        <strong>Mode:</strong> ${mode}<br>
+        <strong>URL:</strong> ${webhookUrl}<br>
+        <strong>Error:</strong> ${error.message}<br>
         <br>
         <strong>Possible causes:</strong><br>
-        - Webhook URL is incorrect<br>
-        - Server is down<br>
-        - CORS policy blocking request<br>
-        - Network connectivity issues
+        ${CONFIG.USE_PRODUCTION ? 
+          '- N8N workflow is not activated<br>- Production webhook endpoint is not running<br>' : 
+          '- Test webhook endpoint is down<br>'
+        }
+        - Network connectivity issues<br>
+        - CORS policy blocking request
       </div>
     `;
   }
@@ -308,25 +391,32 @@ async function processQR() {
 }
 
 function showQRResult(qrData) {
+  const mode = CONFIG.USE_PRODUCTION ? 'PRODUCTION' : 'TEST';
   document.getElementById('qr-result').innerHTML = `
     <div class="result">
       📱 QR Code Decoded: <strong>${qrData}</strong><br>
-      Now sending to webhook...
+      🚀 Sending to <strong>${mode}</strong> webhook...
     </div>
   `;
 }
 
+// 🔥 FIXED: Now uses dynamic webhook URL
 async function sendToWebhook(qrData) {
+  const webhookUrl = getCurrentWebhookUrl();
+  const mode = CONFIG.USE_PRODUCTION ? 'production' : 'test';
+  
   const payload = { 
     qr_data: qrData, 
     timestamp: new Date().toISOString(), 
-    source: 'custom_scanner' 
+    source: 'custom_scanner',
+    mode: mode
   };
   
-  console.log('Sending payload to webhook:', payload);
+  console.log(`Sending payload to ${mode} webhook:`, payload);
+  console.log('Webhook URL:', webhookUrl);
   
   try {
-    const response = await fetch(CONFIG.WEBHOOK_URL, {
+    const response = await fetch(webhookUrl, {
       method: 'POST', 
       headers: { 
         'Content-Type': 'application/json',
@@ -336,7 +426,6 @@ async function sendToWebhook(qrData) {
     });
     
     console.log('Webhook response status:', response.status);
-    console.log('Webhook response headers:', response.headers);
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -362,40 +451,46 @@ async function sendToWebhook(qrData) {
     
   } catch (error) {
     console.error('Webhook error:', error);
-    showError('Failed to process check-in: ' + error.message);
+    showError(`Failed to process check-in (${mode.toUpperCase()} mode): ${error.message}`);
     
     // Show debug info
     document.getElementById('qr-result').innerHTML += `
       <div class="debug">
         <strong>Debug Info:</strong><br>
+        Mode: ${mode.toUpperCase()}<br>
         QR Data: ${qrData}<br>
-        Webhook URL: ${CONFIG.WEBHOOK_URL}<br>
-        Error: ${error.message}
+        Webhook URL: ${webhookUrl}<br>
+        Error: ${error.message}<br>
+        ${CONFIG.USE_PRODUCTION ? '<strong>💡 Tip:</strong> Make sure your N8N workflow is ACTIVATED!' : ''}
       </div>
     `;
   }
 }
 
 function showCheckInSuccess(webhookResponse) {
-  document.getElementById('result-title').innerHTML = '✅ Check-in Successful!';
+  const mode = CONFIG.USE_PRODUCTION ? 'PRODUCTION' : 'TEST';
+  document.getElementById('result-title').innerHTML = `✅ Check-in Successful! (${mode})`;
   document.getElementById('final-result').innerHTML =
     `<div class="success">
        <h3>Welcome to the event! 🎉</h3>
        <p><strong>Name:</strong> ${webhookResponse.name || 'N/A'}</p>
        <p><strong>Ticket:</strong> ${webhookResponse.ticket_number}</p>
        <p><strong>Status:</strong> Successfully checked in</p>
+       <p><strong>Mode:</strong> ${mode}</p>
        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
      </div>`;
   showStep(3);
 }
 
 function showAlreadyCheckedIn(webhookResponse) {
-  document.getElementById('result-title').innerHTML = '⚠️ Already Checked In';
+  const mode = CONFIG.USE_PRODUCTION ? 'PRODUCTION' : 'TEST';
+  document.getElementById('result-title').innerHTML = `⚠️ Already Checked In (${mode})`;
   document.getElementById('final-result').innerHTML =
     `<div class="already-checked-in">
        <h3>This ticket has already been used</h3>
        <p><strong>Ticket:</strong> ${webhookResponse.ticket_number}</p>
        <p><strong>Status:</strong> Already checked in</p>
+       <p><strong>Mode:</strong> ${mode}</p>
        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
        <p><em>Please contact event staff if this is an error.</em></p>
      </div>`;
@@ -403,13 +498,15 @@ function showAlreadyCheckedIn(webhookResponse) {
 }
 
 function showGenericSuccess(qrData, webhookResponse) {
-  document.getElementById('result-title').innerHTML = '✅ QR Code Processed';
+  const mode = CONFIG.USE_PRODUCTION ? 'PRODUCTION' : 'TEST';
+  document.getElementById('result-title').innerHTML = `✅ QR Code Processed (${mode})`;
   document.getElementById('final-result').innerHTML =
     `<div class="success">
        <h3>QR Code Processed Successfully!</h3>
        <p><strong>Ticket:</strong> ${qrData}</p>
+       <p><strong>Mode:</strong> ${mode}</p>
        <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-       ${webhookResponse ? `<div class="debug">Response: ${JSON.stringify(webhookResponse)}</div>` : ''}
+       ${webhookResponse ? `<div class="debug">Response: ${JSON.stringify(webhookResponse, null, 2)}</div>` : ''}
      </div>`;
   showStep(3);
 }
@@ -423,24 +520,6 @@ function showStep(n) {
   document.getElementById(`step${n}`).classList.add('active');
 }
 
-function toggleMode() {
-  CONFIG.USE_PRODUCTION = !CONFIG.USE_PRODUCTION;
-  const btn = document.getElementById('modeBtn');
-  const mode = CONFIG.USE_PRODUCTION ? 'PRODUCTION' : 'TEST';
-  const switchTo = CONFIG.USE_PRODUCTION ? 'TEST' : 'PRODUCTION';
-  
-  btn.textContent = `Switch to ${switchTo} Mode`;
-  btn.style.background = CONFIG.USE_PRODUCTION ? '#F44336' : '#4CAF50';
-  
-  document.getElementById('qr-result').innerHTML = `
-    <div style="color: ${CONFIG.USE_PRODUCTION ? '#F44336' : '#4CAF50'}; font-weight: bold;">
-      📡 Now using ${mode} webhook
-    </div>
-  `;
-  
-  console.log(`Switched to ${mode} mode`);
-}
-
 function resetScanner() {
   selectedFile = null;
   document.getElementById('qrFile').value = '';
@@ -448,6 +527,11 @@ function resetScanner() {
   document.getElementById('qr-result').innerHTML = '';
   showStep(2);
 }
+
+// Initialize display
+document.addEventListener('DOMContentLoaded', function() {
+  updateModeDisplay();
+});
 
 document.getElementById('passcode').addEventListener('keypress', e => {
   if (e.key === 'Enter') verifyPasscode();
