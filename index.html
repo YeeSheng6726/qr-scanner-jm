@@ -759,4 +759,10 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof QrScanner === 'undefined') {
     console.warn('QR Scanner library not loaded, camera functionality will be limited');
     document.getElementById('start-camera-btn').disabled = true;
-    document.getElementById('start-camera-btn').innerHTML = '❌ Camera Library Not Available
+    document.getElementById('start-camera-btn').innerHTML = '❌ Camera Library Not Available';
+  }
+});
+
+document.getElementById('passcode').addEventListener('keypress', e => {
+  if (e.key === 'Enter') verifyPasscode();
+});
