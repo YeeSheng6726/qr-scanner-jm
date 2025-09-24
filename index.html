@@ -81,67 +81,6 @@
     }
     button:hover { transform: translateY(-2px); }
     button:disabled { background: #ccc; cursor: not-allowed; transform: none; }
-    
-    /* Camera Scanner Styles */
-    .scanner-container {
-      margin: 20px 0;
-      border-radius: 10px;
-      overflow: hidden;
-      position: relative;
-    }
-    #camera-view {
-      width: 100%;
-      max-width: 400px;
-      height: 300px;
-      border-radius: 10px;
-      background: #000;
-    }
-    .scanner-overlay {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 200px;
-      height: 200px;
-      border: 3px solid #FF6B35;
-      border-radius: 10px;
-      pointer-events: none;
-    }
-    .scanner-overlay::before {
-      content: '';
-      position: absolute;
-      top: -3px;
-      left: -3px;
-      right: -3px;
-      bottom: -3px;
-      border: 3px solid rgba(255, 107, 53, 0.3);
-      border-radius: 10px;
-      animation: pulse 2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(1.05); }
-    }
-    
-    .camera-controls {
-      display: flex;
-      gap: 10px;
-      margin-top: 15px;
-      flex-wrap: wrap;
-    }
-    .camera-controls button {
-      flex: 1;
-      min-width: 120px;
-      padding: 10px 15px;
-      font-size: 14px;
-    }
-    .camera-btn {
-      background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
-    }
-    .stop-btn {
-      background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%) !important;
-    }
-    
     .file-input {
       border: 2px dashed #FF6B35;
       padding: 30px;
@@ -181,40 +120,11 @@
     .toggle-btn.production {
       background: #F44336 !important;
     }
-    
-    .scanning-methods {
-      margin: 20px 0;
-    }
-    .method-divider {
-      margin: 20px 0;
-      text-align: center;
-      color: #666;
-      font-size: 14px;
-    }
-    .method-divider::before,
-    .method-divider::after {
-      content: '';
-      display: inline-block;
-      width: 30%;
-      height: 1px;
-      background: #ddd;
-      margin: 0 10px;
-      vertical-align: middle;
-    }
-    
     /* Mobile fixes */
     @media (max-width: 600px) {
       h1 { font-size: 1.4em; }
       input, button { font-size: 14px; padding: 12px; }
       .file-input { padding: 20px; }
-      #camera-view { height: 250px; }
-      .scanner-overlay { width: 150px; height: 150px; }
-      .camera-controls { 
-        flex-direction: column; 
-      }
-      .camera-controls button {
-        min-width: auto;
-      }
     }
   </style>
 </head>
@@ -239,39 +149,12 @@
       <button onclick="toggleMode()" id="modeBtn" class="toggle-btn">🚀 Switch to PRODUCTION Mode</button>
       
       <h2>Scan QR Code</h2>
-      
-      <!-- Camera Scanner Section -->
-      <div class="scanning-methods">
-        <h3 style="margin-bottom: 15px; color: #333;">📸 Live Camera Scan</h3>
-        <div class="scanner-container" id="scanner-container" style="display: none;">
-          <video id="camera-view" autoplay playsinline></video>
-          <div class="scanner-overlay"></div>
-        </div>
-        
-        <div class="camera-controls">
-          <button onclick="startCamera()" id="start-camera-btn" class="camera-btn">
-            📹 Start Camera
-          </button>
-          <button onclick="stopCamera()" id="stop-camera-btn" class="stop-btn" style="display: none;">
-            ⏹️ Stop Camera
-          </button>
-          <button onclick="switchCamera()" id="switch-camera-btn" style="display: none;">
-            🔄 Switch Camera
-          </button>
-        </div>
-        
-        <div class="method-divider">OR</div>
-        
-        <!-- File Upload Section -->
-        <h3 style="margin-bottom: 15px; color: #333;">📁 Upload QR Image</h3>
-        <div class="file-input" onclick="document.getElementById('qrFile').click()">
-          <input type="file" id="qrFile" accept="image/*" onchange="handleFileSelect(event)">
-          <p>📷 Click to upload QR code image</p>
-          <small>Supports JPG, PNG, HEIC (iPhone), GIF</small>
-        </div>
-        <button onclick="processQR()" id="processBtn" disabled>Process QR Code</button>
+      <div class="file-input" onclick="document.getElementById('qrFile').click()">
+        <input type="file" id="qrFile" accept="image/*" onchange="handleFileSelect(event)">
+        <p>📷 Click to upload QR code image</p>
+        <small>Supports JPG, PNG, HEIC (iPhone), GIF</small>
       </div>
-      
+      <button onclick="processQR()" id="processBtn" disabled>Process QR Code</button>
       <button onclick="testWebhook()" style="background: #666; margin-top: 10px;">🔧 Test Current Webhook</button>
       <div id="qr-result"></div>
     </div>
@@ -283,16 +166,8 @@
       <button onclick="resetScanner()">Scan Another QR Code</button>
     </div>
   </div>
-
-  <!-- Include QR Code Scanner Library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qr-scanner/1.4.2/qr-scanner.umd.min.js"></script>
-
 <script>
 let selectedFile = null;
-let qrScanner = null;
-let currentStream = null;
-let cameras = [];
-let currentCameraIndex = 0;
 
 // 🔥 FIXED CONFIG - Now supports both test and production URLs
 const CONFIG = {
@@ -307,101 +182,6 @@ const CONFIG = {
 // Get current webhook URL based on mode
 function getCurrentWebhookUrl() {
   return CONFIG.USE_PRODUCTION ? CONFIG.URLS.PRODUCTION : CONFIG.URLS.TEST;
-}
-
-// Camera functionality
-async function startCamera() {
-  try {
-    const video = document.getElementById('camera-view');
-    const scannerContainer = document.getElementById('scanner-container');
-    const startBtn = document.getElementById('start-camera-btn');
-    const stopBtn = document.getElementById('stop-camera-btn');
-    const switchBtn = document.getElementById('switch-camera-btn');
-    
-    // Get available cameras
-    cameras = await QrScanner.listCameras();
-    console.log('Available cameras:', cameras);
-    
-    // Show camera view
-    scannerContainer.style.display = 'block';
-    startBtn.style.display = 'none';
-    stopBtn.style.display = 'inline-block';
-    
-    if (cameras.length > 1) {
-      switchBtn.style.display = 'inline-block';
-    }
-    
-    // Start QR scanner
-    qrScanner = new QrScanner(
-      video,
-      result => {
-        console.log('QR Code detected:', result.data);
-        handleCameraQRResult(result.data);
-      },
-      {
-        preferredCamera: cameras[currentCameraIndex]?.id || 'environment',
-        highlightScanRegion: true,
-        highlightCodeOutline: true,
-      }
-    );
-    
-    await qrScanner.start();
-    console.log('Camera started successfully');
-    
-    document.getElementById('qr-result').innerHTML = 
-      '<div style="color: #4CAF50; padding: 10px;">📱 Camera ready! Position QR code within the frame</div>';
-    
-  } catch (error) {
-    console.error('Camera error:', error);
-    document.getElementById('qr-result').innerHTML = 
-      `<div class="error">❌ Camera Error: ${error.message}<br>
-       <small>Please ensure camera permissions are granted and try again.</small></div>`;
-  }
-}
-
-async function stopCamera() {
-  if (qrScanner) {
-    qrScanner.stop();
-    qrScanner.destroy();
-    qrScanner = null;
-  }
-  
-  document.getElementById('scanner-container').style.display = 'none';
-  document.getElementById('start-camera-btn').style.display = 'inline-block';
-  document.getElementById('stop-camera-btn').style.display = 'none';
-  document.getElementById('switch-camera-btn').style.display = 'none';
-  document.getElementById('qr-result').innerHTML = '';
-}
-
-async function switchCamera() {
-  if (cameras.length > 1) {
-    currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
-    
-    if (qrScanner) {
-      try {
-        await qrScanner.setCamera(cameras[currentCameraIndex].id);
-        console.log('Switched to camera:', cameras[currentCameraIndex]);
-        
-        document.getElementById('qr-result').innerHTML = 
-          `<div style="color: #4CAF50; padding: 10px;">📷 Switched to: ${cameras[currentCameraIndex].label || 'Camera ' + (currentCameraIndex + 1)}</div>`;
-      } catch (error) {
-        console.error('Error switching camera:', error);
-        document.getElementById('qr-result').innerHTML = 
-          `<div class="error">❌ Error switching camera: ${error.message}</div>`;
-      }
-    }
-  }
-}
-
-function handleCameraQRResult(qrData) {
-  console.log('Processing camera QR result:', qrData);
-  
-  // Stop camera
-  stopCamera();
-  
-  // Show result and process
-  showQRResult(qrData);
-  sendToWebhook(qrData);
 }
 
 function verifyPasscode() {
@@ -741,9 +521,6 @@ function showStep(n) {
 }
 
 function resetScanner() {
-  // Stop camera if running
-  stopCamera();
-  
   selectedFile = null;
   document.getElementById('qrFile').value = '';
   document.getElementById('processBtn').disabled = true;
@@ -754,15 +531,11 @@ function resetScanner() {
 // Initialize display
 document.addEventListener('DOMContentLoaded', function() {
   updateModeDisplay();
-  
-  // Check if QrScanner is available
-  if (typeof QrScanner === 'undefined') {
-    console.warn('QR Scanner library not loaded, camera functionality will be limited');
-    document.getElementById('start-camera-btn').disabled = true;
-    document.getElementById('start-camera-btn').innerHTML = '❌ Camera Library Not Available';
-  }
 });
 
 document.getElementById('passcode').addEventListener('keypress', e => {
   if (e.key === 'Enter') verifyPasscode();
 });
+</script>
+</body>
+</html>
